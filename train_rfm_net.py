@@ -96,7 +96,7 @@ def main():
         model, optimizer, train_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
         agop_loader = make_dataloader(X_tr.clone(), y_tr_onehot.clone(), args.agop_batch_size, shuffle=False, drop_last=True)
     
-        for epoch in tqdm(range(args.epochs)):
+        for epoch in tqdm(range(args.epochs_per_rfm)):
 
             model.train()
             for idx, batch in enumerate(train_loader):

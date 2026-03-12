@@ -135,7 +135,7 @@ def main():
                     'training/mse_loss': base_loss,
                     'training/w_norm_fc1': weight_norm_fc1,
                     'training/w_norm_out': weight_norm_out,
-                    'epoch': epoch
+                    'epoch': ((rfm_iter*args.epochs_per_rfm) + epoch)
                 }, step=global_step)
 
                 global_step += 1
@@ -162,10 +162,10 @@ def main():
                 wandb.log({
                     'validation/accuracy': acc,
                     'validation/loss': total_loss,
-                    'epoch': epoch
+                    'epoch': ((rfm_iter*args.epochs_per_rfm) + epoch)
                 }, step=global_step)
 
-        ep_out_dir = os.path.join(out_dir, f'epoch_{epoch}')
+        ep_out_dir = os.path.join(out_dir, f'epoch_{((rfm_iter*args.epochs_per_rfm) + epoch)}')
         os.makedirs(ep_out_dir, exist_ok=True)
 
         agop, per_class_agops = agop_utils.calc_full_agop(model, agop_loader, args)

@@ -39,7 +39,7 @@ def instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot):
         betas=(0.9, 0.98),
         weight_decay=args.weight_decay
     )
-    return model, optimizer, train_loader, agop_loader, test_loader
+    return model, optimizer, train_loader, test_loader
 
 
 def main():
@@ -93,7 +93,7 @@ def main():
     global_step = 0
     for rfm_iter in range(args.num_rfm_iters): 
         print(f"Starting RFM Iteration {rfm_iter}")
-        model, optimizer, train_loader, agop_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
+        model, optimizer, train_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
         agop_loader = make_dataloader(X_tr.clone(), y_tr_onehot.clone(), args.agop_batch_size, shuffle=False, drop_last=True)
     
         for epoch in tqdm(range(args.epochs)):
@@ -165,52 +165,51 @@ def main():
                     'epoch': epoch
                 }, step=global_step)
 
-            ep_out_dir = os.path.join(out_dir, f'epoch_{epoch}')
-            os.makedirs(ep_out_dir, exist_ok=True)
+        ep_out_dir = os.path.join(out_dir, f'epoch_{epoch}')
+        os.makedirs(ep_out_dir, exist_ok=True)
 
-            agop, per_class_agops = agop_utils.calc_full_agop(model, agop_loader, args)
-            utils.display_all_agops([agop], per_class_agops, wandb, global_step)
+        agop, per_class_agops = agop_utils.calc_full_agop(model, agop_loader, args)
+        utils.display_all_agops([agop], per_class_agops, wandb, global_step)
 
-            nfm = model.fc1.weight.data.T @ model.fc1.weight.data
-            nfm = nfm.detach().cpu().numpy()
+        nfm = model.fc1.weight.data.T @ model.fc1.weight.data
+        nfm = nfm.detach().cpu().numpy()
 
-            sqrt_agop = np.real(scipy.linalg.sqrtm(agop.numpy()))
-            # sqrt_agop_tensor = torch.from_numpy(sqrt_agop).to(args.device)
-            np.save(os.path.join(ep_out_dir, 'sqrt_agop.npy'), sqrt_agop)
+        sqrt_agop = np.real(scipy.linalg.sqrtm(agop.numpy()))
+        # sqrt_agop_tensor = torch.from_numpy(sqrt_agop).to(args.device)
+        np.save(os.path.join(ep_out_dir, 'sqrt_agop.npy'), sqrt_agop)
 
-            nfa_corr = np.corrcoef(sqrt_agop.flatten(), nfm.flatten())
-            nfa_no_diag_corr = np.corrcoef((sqrt_agop - np.diag(np.diag(sqrt_agop))).flatten(), (nfm - np.diag(np.diag(nfm))).flatten())
-            wandb.log({
-                'nfa/nfa_corr': nfa_corr[0][1],
-                'nfa/nfa_no_diag_corr': nfa_no_diag_corr[0][1]
-            }, step=global_step)
+        nfa_corr = np.corrcoef(sqrt_agop.flatten(), nfm.flatten())
+        nfa_no_diag_corr = np.corrcoef((sqrt_agop - np.diag(np.diag(sqrt_agop))).flatten(), (nfm - np.diag(np.diag(nfm))).flatten())
+        wandb.log({
+            'nfa/nfa_corr': nfa_corr[0][1],
+            'nfa/nfa_no_diag_corr': nfa_no_diag_corr[0][1]
+        }, step=global_step)
 
-            plt.clf()
-            plt.imshow(nfm)
-            plt.colorbar()
-            img = wandb.Image(
-                plt,
-                caption='NFM'
-            )
-            wandb.log({'NFM': img}, step=global_step)
-            np.save(os.path.join(ep_out_dir, 'nfm.npy'), nfm)
+        plt.clf()
+        plt.imshow(nfm)
+        plt.colorbar()
+        img = wandb.Image(
+            plt,
+            caption='NFM'
+        )
+        wandb.log({'NFM': img}, step=global_step)
+        np.save(os.path.join(ep_out_dir, 'nfm.npy'), nfm)
 
-            plt.clf()
-            plt.imshow(nfm - np.diag(np.diag(nfm)))
-            plt.colorbar()
-            img = wandb.Image(
-                plt,
-                caption='NFM_no_diag'
-            )
-            wandb.log({'NFM_no_diag': img}, step=global_step)
-            X_tr = X_tr @ sqrt_agop
-            X_te = X_te @ sqrt_agop
-            
-            # (Optional) Normalize the datasets so gradients/activations don't explode 
-            # across multiple recursive iterations
-            X_tr = X_tr / torch.norm(X_tr, dim=1, keepdim=True)
-            X_te = X_te / torch.norm(X_te, dim=1, keepdim=True)
-            model, optimizer, train_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
+        plt.clf()
+        plt.imshow(nfm - np.diag(np.diag(nfm)))
+        plt.colorbar()
+        img = wandb.Image(
+            plt,
+            caption='NFM_no_diag'
+        )
+        wandb.log({'NFM_no_diag': img}, step=global_step)
+        X_tr = X_tr @ sqrt_agop
+        X_te = X_te @ sqrt_agop
+        
+        # (Optional) Normalize the datasets so gradients/activations don't explode 
+        # across multiple recursive iterations
+        X_tr = X_tr / torch.norm(X_tr, dim=1, keepdim=True)
+        X_te = X_te / torch.norm(X_te, dim=1, keepdim=True)
 
 
 

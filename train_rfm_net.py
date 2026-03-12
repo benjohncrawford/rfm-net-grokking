@@ -23,7 +23,6 @@ torch.set_default_dtype(torch.float64)
 
 def instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot):
     train_loader = make_dataloader(X_tr, y_tr_onehot, args.batch_size, shuffle=True, drop_last=False)
-    agop_loader = make_dataloader(X_tr.clone(), y_tr_onehot.clone(), args.agop_batch_size, shuffle=False, drop_last=True)
     test_loader = make_dataloader(X_te, y_te_onehot, args.batch_size, shuffle=False, drop_last=False)
 
     model = neural_nets.OneLayerFCN(
@@ -55,7 +54,8 @@ def main():
     parser.add_argument('--training_fraction', default=0.3, type=float)
     parser.add_argument('--batch_size', default=32, type=int)
     parser.add_argument('--agop_batch_size', default=32, type=int)
-    parser.add_argument('--epochs', default=1000, type=int)
+    parser.add_argument('--num_rfm_iters', default=10, type=int)
+    parser.add_argument('--epochs_per_rfm', default=10, type=int)
     parser.add_argument('--device', default='cuda', choices={'cuda', 'cpu'})
     parser.add_argument('--agop_display_freq', default=100, type=int)
     parser.add_argument('--model', default='OneLayerFCN')
@@ -88,83 +88,83 @@ def main():
     y_tr_onehot = F.one_hot(y_tr, args.prime).double()
     X_te = F.one_hot(X_te, args.prime).view(-1, 2*args.prime).double()
     y_te_onehot = F.one_hot(y_te, args.prime).double()
-
-    model, optimizer, train_loader, agop_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
     criterion = torch.nn.MSELoss()
 
     global_step = 0
-    for epoch in tqdm(range(args.epochs)):
+    for rfm_iter in range(args.num_rfm_iters): 
+        print(f"Starting RFM Iteration {rfm_iter}")
+        model, optimizer, train_loader, agop_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
+        agop_loader = make_dataloader(X_tr.clone(), y_tr_onehot.clone(), args.agop_batch_size, shuffle=False, drop_last=True)
+    
+        for epoch in tqdm(range(args.epochs)):
 
-        model.train()
-        for idx, batch in enumerate(train_loader):
-            batch = tuple(t.to(args.device) for t in batch)
-            inputs, labels = batch
-
-            optimizer.zero_grad()
-            output = model(inputs, act=args.act_fn)
-
-            if args.agop_reg > 0.0:
-                # both methods compute exact agop, one using jacrev the other using exact solution
-                # can impact auto-differentiation timing depending on GPU / CPU settings:
-                # agop, _ = agop_utils.calc_full_agop(model, agop_loader, args, calc_per_class_agops=False,
-                                                                 # detach=False)
-                agop = agop_utils.calc_full_agops_exact(model, agop_loader, args, detach=False)
-
-            count = (output.argmax(-1) == labels.argmax(-1)).sum()
-            acc = count / output.shape[0]
-
-            loss = criterion(output, labels)
-            base_loss = loss.clone()
-
-            # AGOP regularizing loss
-            if args.agop_reg > 0.0:
-                loss += args.agop_reg * torch.trace(agop)
-
-            weight_norm_fc1 = torch.linalg.norm(model.fc1.weight.data).detach()
-            weight_norm_out = torch.linalg.norm(model.out.weight.data).detach()
-
-            loss.backward()
-            optimizer.step()
-
-            wandb.log({
-                'training/accuracy': acc,
-                'training/loss': loss,
-                'training/mse_loss': base_loss,
-                'training/w_norm_fc1': weight_norm_fc1,
-                'training/w_norm_out': weight_norm_out,
-                'epoch': epoch
-            }, step=global_step)
-
-            global_step += 1
-
-        model.eval()
-        with torch.no_grad():
-            count = 0
-            total_loss = 0
-            total = 0
-            for idx, batch in enumerate(test_loader):
+            model.train()
+            for idx, batch in enumerate(train_loader):
                 batch = tuple(t.to(args.device) for t in batch)
                 inputs, labels = batch
 
+                optimizer.zero_grad()
                 output = model(inputs, act=args.act_fn)
 
-                count += (output.argmax(-1) == labels.argmax(-1)).sum()
-                total += output.shape[0]
+                if args.agop_reg > 0.0:
+                    # both methods compute exact agop, one using jacrev the other using exact solution
+                    # can impact auto-differentiation timing depending on GPU / CPU settings:
+                    # agop, _ = agop_utils.calc_full_agop(model, agop_loader, args, calc_per_class_agops=False,
+                                                                    # detach=False)
+                    agop = agop_utils.calc_full_agops_exact(model, agop_loader, args, detach=False)
+
+                count = (output.argmax(-1) == labels.argmax(-1)).sum()
+                acc = count / output.shape[0]
+
                 loss = criterion(output, labels)
-                total_loss += loss * output.shape[0]
+                base_loss = loss.clone()
 
-            total_loss /= total
-            acc = count / total
+                # AGOP regularizing loss
+                if args.agop_reg > 0.0:
+                    loss += args.agop_reg * torch.trace(agop)
 
-            wandb.log({
-                'validation/accuracy': acc,
-                'validation/loss': total_loss,
-                'epoch': epoch
-            }, step=global_step)
+                weight_norm_fc1 = torch.linalg.norm(model.fc1.weight.data).detach()
+                weight_norm_out = torch.linalg.norm(model.out.weight.data).detach()
 
-        
+                loss.backward()
+                optimizer.step()
 
-        if epoch % args.agop_display_freq == 0:
+                wandb.log({
+                    'training/accuracy': acc,
+                    'training/loss': loss,
+                    'training/mse_loss': base_loss,
+                    'training/w_norm_fc1': weight_norm_fc1,
+                    'training/w_norm_out': weight_norm_out,
+                    'epoch': epoch
+                }, step=global_step)
+
+                global_step += 1
+
+            model.eval()
+            with torch.no_grad():
+                count = 0
+                total_loss = 0
+                total = 0
+                for idx, batch in enumerate(test_loader):
+                    batch = tuple(t.to(args.device) for t in batch)
+                    inputs, labels = batch
+
+                    output = model(inputs, act=args.act_fn)
+
+                    count += (output.argmax(-1) == labels.argmax(-1)).sum()
+                    total += output.shape[0]
+                    loss = criterion(output, labels)
+                    total_loss += loss * output.shape[0]
+
+                total_loss /= total
+                acc = count / total
+
+                wandb.log({
+                    'validation/accuracy': acc,
+                    'validation/loss': total_loss,
+                    'epoch': epoch
+                }, step=global_step)
+
             ep_out_dir = os.path.join(out_dir, f'epoch_{epoch}')
             os.makedirs(ep_out_dir, exist_ok=True)
 
@@ -210,7 +210,7 @@ def main():
             # across multiple recursive iterations
             X_tr = X_tr / torch.norm(X_tr, dim=1, keepdim=True)
             X_te = X_te / torch.norm(X_te, dim=1, keepdim=True)
-            model, optimizer, train_loader, agop_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
+            model, optimizer, train_loader, test_loader = instanstiate_model(args, X_tr, y_tr_onehot, X_te, y_te_onehot)
 
 
 

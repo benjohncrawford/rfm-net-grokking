@@ -79,7 +79,7 @@ def main():
     out_dir = os.path.join(args.out_dir, args.wandb_proj_name, wandb.run.id)
     os.makedirs(out_dir, exist_ok=True)
 
-    wandb.run.name = f'{wandb.run.id} - p: {args.prime}, train_frac: {args.training_fraction}'
+    wandb.run.name = f'{wandb.run.id} - epoch_per_rfm: {args.epochs_per_rfm} p: {args.prime}, train_frac: {args.training_fraction}'
 
     all_inputs, all_labels = operation_mod_p_data(args.operation, args.prime)
     X_tr, y_tr, X_te, y_te = make_data_splits(all_inputs, all_labels, args.training_fraction)

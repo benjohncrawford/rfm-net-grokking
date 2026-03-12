@@ -175,7 +175,7 @@ def main():
             nfm = nfm.detach().cpu().numpy()
 
             sqrt_agop = np.real(scipy.linalg.sqrtm(agop.numpy()))
-            sqrt_agop_tensor = torch.from_numpy(sqrt_agop).to(args.device)
+            # sqrt_agop_tensor = torch.from_numpy(sqrt_agop).to(args.device)
             np.save(os.path.join(ep_out_dir, 'sqrt_agop.npy'), sqrt_agop)
 
             nfa_corr = np.corrcoef(sqrt_agop.flatten(), nfm.flatten())
@@ -203,8 +203,8 @@ def main():
                 caption='NFM_no_diag'
             )
             wandb.log({'NFM_no_diag': img}, step=global_step)
-            X_tr = X_tr @ sqrt_agop_tensor
-            X_te = X_te @ sqrt_agop_tensor
+            X_tr = X_tr @ sqrt_agop
+            X_te = X_te @ sqrt_agop
             
             # (Optional) Normalize the datasets so gradients/activations don't explode 
             # across multiple recursive iterations

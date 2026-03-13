@@ -203,8 +203,11 @@ def main():
             caption='NFM_no_diag'
         )
         wandb.log({'NFM_no_diag': img}, step=global_step)
-        X_tr = X_tr @ sqrt_agop
-        X_te = X_te @ sqrt_agop
+
+        U, s, Vt = scipy.sparse.linalg.svds(agop, k=agop.shape[0]/2)
+        low_rank_agop = U @ np.diag(s) @ Vt
+        X_tr = X_tr @ low_rank_agop
+        X_te = X_te @ low_rank_agop
         
         # (Optional) Normalize the datasets so gradients/activations don't explode 
         # across multiple recursive iterations

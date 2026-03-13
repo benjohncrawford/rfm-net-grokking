@@ -205,7 +205,8 @@ def main():
         wandb.log({'NFM_no_diag': img}, step=global_step)
         # 1. Eigendecomposition of the symmetric AGOP matrix
         # torch.linalg.eigh returns eigenvalues in ASCENDING order
-        eigenvalues, eigenvectors = torch.linalg.eigh(sqrt_agop)
+        agop_tensor = agop.to(args.device)
+        eigenvalues, eigenvectors = torch.linalg.eigh(agop_tensor)
 
         # 2. Filter the eigenvalues
         filtered_eigenvalues = torch.zeros_like(eigenvalues)

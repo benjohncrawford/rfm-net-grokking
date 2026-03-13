@@ -203,9 +203,27 @@ def main():
             caption='NFM_no_diag'
         )
         wandb.log({'NFM_no_diag': img}, step=global_step)
+        # 1. Eigendecomposition of the symmetric AGOP matrix
+        # torch.linalg.eigh returns eigenvalues in ASCENDING order
+        eigenvalues, eigenvectors = torch.linalg.eigh(sqrt_agop)
 
-        U, s, Vt = scipy.sparse.linalg.svds(agop, k=agop.shape[0]/2)
-        low_rank_agop = U @ np.diag(s) @ Vt
+        # 2. Filter the eigenvalues
+        filtered_eigenvalues = torch.zeros_like(eigenvalues)
+        k = args.top_k_eigs
+        
+        if k > 0:
+            # Keep only the top k largest eigenvalues
+            filtered_eigenvalues[-k:] = eigenvalues[-k:]
+        else:
+            # If k=0, keep them all (no filtering)
+            filtered_eigenvalues = eigenvalues
+
+        # 3. Compute the square root of the filtered eigenvalues
+        # (Clamp at 0 to avoid NaNs from floating point inaccuracies near zero)
+        sqrt_eigenvalues = torch.sqrt(torch.clamp(filtered_eigenvalues, min=0.0))
+
+        # 4. Reconstruct the filtered square root matrix: M^(1/2) = V * sqrt(Lambda) * V^T
+        low_rank_agop = eigenvectors @ torch.diag(sqrt_eigenvalues) @ eigenvectors.T
         X_tr = X_tr @ low_rank_agop
         X_te = X_te @ low_rank_agop
         

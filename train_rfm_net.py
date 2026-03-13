@@ -224,7 +224,7 @@ def main():
         sqrt_eigenvalues = torch.sqrt(torch.clamp(filtered_eigenvalues, min=0.0))
 
         # 4. Reconstruct the filtered square root matrix: M^(1/2) = V * sqrt(Lambda) * V^T
-        low_rank_agop = (eigenvectors @ torch.diag(sqrt_eigenvalues) @ eigenvectors.T).numpy()
+        low_rank_agop = (eigenvectors @ torch.diag(sqrt_eigenvalues) @ eigenvectors.T).detach().numpy()
         X_tr = X_tr @ low_rank_agop
         X_te = X_te @ low_rank_agop
         

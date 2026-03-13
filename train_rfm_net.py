@@ -210,7 +210,7 @@ def main():
 
         # 2. Filter the eigenvalues
         filtered_eigenvalues = torch.zeros_like(eigenvalues)
-        k = args.top_k_eigs
+        k = 100
         
         if k > 0:
             # Keep only the top k largest eigenvalues
